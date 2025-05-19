@@ -58,9 +58,12 @@ def put(
         # Read from stdin if no content provided
         content = sys.stdin.read()
 
-    typer.echo(f"Uploading to {url} with content type: {content_type}")
-    typer.echo(f"Content: {content[:50]}{'...' if len(content) > 50 else ''}")
-    # Implementation will go here
+    async def upload():
+        async with AsyncClient() as client:
+            blob = UrlBlob(url, client, url_type=state.url_type)
+            await blob.put(content=content, content_type=content_type)
+
+    asyncio.run(upload())
 
 
 @app.command()

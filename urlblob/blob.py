@@ -1,7 +1,8 @@
-from contextlib import nullcontext
 from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
 from .util import build_range_header, detect_url_type, UrlType
+
+from typing import IO
 
 
 class UrlBlob:
@@ -37,3 +38,31 @@ class UrlBlob:
         response = await self._client.get(self._url, headers=headers)
 
         return response.content
+
+    async def put(
+        self,
+        content: str | bytes | IO[str] | IO[bytes],
+        content_type: str | None = None,
+    ) -> None:
+        """
+        Upload content to the URL using HTTP PUT.
+
+        Args:
+            content: The content to upload. Can be a string, bytes, or a file-like object.
+            content_type: Optional content type header to set. If not provided,
+                          the server will determine the content type.
+
+        Raises:
+            ValueError: If the upload fails with details about the error.
+        """
+        from .util import build_put_headers
+
+        headers = build_put_headers(url_type=self._url_type, content_type=content_type)
+        response = await self._client.put(self._url, content=content, headers=headers)
+
+        # Check if the upload was successful (2xx status codes)
+        if not response.is_success:
+            error_msg = f"Upload failed with status {response.status_code}"
+            error_details = response.text
+            error_msg += f": {error_details}"
+            raise ValueError(error_msg)

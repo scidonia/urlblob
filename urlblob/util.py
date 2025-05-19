@@ -203,3 +203,31 @@ def build_range_header(
         )
 
     return headers
+
+
+def build_put_headers(
+    url_type: UrlType,
+    content_type: str | None = None,
+) -> dict:
+    """
+    Build headers dictionary for PUT requests.
+
+    Args:
+        url_type: URL type to customize headers for specific cloud providers.
+        content_type: Optional content type to set.
+
+    Returns:
+        Dictionary with appropriate headers for the PUT request.
+    """
+    headers = {}
+
+    if content_type:
+        headers["Content-Type"] = content_type
+
+    # Add Azure-specific headers
+    if url_type == UrlType.AZURE:
+        # Azure Blob Storage requires x-ms-blob-type header
+        # BlockBlob is the most common type for general purpose storage
+        headers["x-ms-blob-type"] = "BlockBlob"
+
+    return headers
