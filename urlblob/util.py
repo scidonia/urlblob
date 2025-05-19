@@ -1,3 +1,165 @@
+from enum import Enum, auto
+import re
+from typing import Optional
+from itertools import chain
+
+
+class UrlType(Enum):
+    """Enum representing different cloud provider URL types."""
+
+    S3 = auto()
+    GCP = auto()
+    AZURE = auto()
+    GENERIC = auto()
+
+
+# Precompiled regexes for S3-compatible services
+_S3_COMPATIBLE_PATTERNS = [
+    re.compile(pattern)
+    for pattern in [
+        r"\.s3\.[a-z0-9-]+\.amazonaws\.com",
+        r"s3\.amazonaws\.com",
+    ]
+]
+
+# Precompiled regexes for GCP-compatible services
+_GCP_COMPATIBLE_PATTERNS = [
+    re.compile(pattern)
+    for pattern in [
+        r"\.storage\.googleapis\.com",
+        r"storage\.cloud\.google\.com",
+    ]
+]
+
+# Precompiled regexes for Azure-compatible services
+_AZURE_COMPATIBLE_PATTERNS = [
+    re.compile(pattern)
+    for pattern in [
+        r"\.blob\.core\.windows\.net",
+    ]
+]
+
+# Combined regex for S3-compatible services
+_S3_COMBINED_PATTERN = re.compile(
+    "|".join(f"({pattern.pattern})" for pattern in _S3_COMPATIBLE_PATTERNS)
+)
+
+# Combined regex for GCP-compatible services
+_GCP_COMBINED_PATTERN = re.compile(
+    "|".join(f"({pattern.pattern})" for pattern in _GCP_COMPATIBLE_PATTERNS)
+)
+
+# Combined regex for Azure-compatible services
+_AZURE_COMBINED_PATTERN = re.compile(
+    "|".join(f"({pattern.pattern})" for pattern in _AZURE_COMPATIBLE_PATTERNS)
+)
+
+
+def is_s3_compatible(url: str) -> bool:
+    """
+    Check if a URL is from an S3-compatible storage provider.
+
+    Args:
+        url: The URL to analyze.
+
+    Returns:
+        bool: True if the URL is from an S3-compatible provider.
+    """
+    # Use the combined pattern for efficient matching
+    return bool(_S3_COMBINED_PATTERN.search(url))
+
+
+def is_gcp_compatible(url: str) -> bool:
+    """
+    Check if a URL is from a GCP-compatible storage provider.
+
+    Args:
+        url: The URL to analyze.
+
+    Returns:
+        bool: True if the URL is from a GCP-compatible provider.
+    """
+    # Use the combined pattern for efficient matching
+    return bool(_GCP_COMBINED_PATTERN.search(url))
+
+
+def is_azure_compatible(url: str) -> bool:
+    """
+    Check if a URL is from an Azure-compatible storage provider.
+
+    Args:
+        url: The URL to analyze.
+
+    Returns:
+        bool: True if the URL is from an Azure-compatible provider.
+    """
+    # Use the combined pattern for efficient matching
+    return bool(_AZURE_COMBINED_PATTERN.search(url))
+
+
+def parse_url_type(url_type_str: str) -> UrlType:
+    """
+    Parse a string into a UrlType enum value, with support for aliases.
+
+    Args:
+        url_type_str: String representation of URL type.
+
+    Returns:
+        UrlType: The corresponding enum value.
+
+    Raises:
+        ValueError: If the string doesn't match any known URL type.
+    """
+    # Convert to uppercase for case-insensitive matching
+    url_type_upper = url_type_str.upper()
+
+    # Direct enum name matching
+    if url_type_upper in UrlType.__members__:
+        return UrlType[url_type_upper]
+
+    # Aliases
+    aliases = {
+        "AWS": UrlType.S3,
+        "AWS_S3": UrlType.S3,
+        "GOOGLE": UrlType.GCP,
+        "AZ": UrlType.AZURE,
+        "WINDOWS": UrlType.AZURE,
+    }
+
+    if url_type_upper in aliases:
+        return aliases[url_type_upper]
+
+    # If no match is found, raise an error with valid options
+    valid_types = ", ".join([x.lower() for x in UrlType.__members__.keys()])
+    raise ValueError(f"Invalid URL type: {url_type_str}. Valid types: {valid_types}")
+
+
+def detect_url_type(url: str) -> UrlType:
+    """
+    Detect the cloud provider type from a URL.
+
+    Args:
+        url: The URL to analyze.
+
+    Returns:
+        UrlType: The detected URL type.
+    """
+    # Check for S3-compatible providers
+    if is_s3_compatible(url):
+        return UrlType.S3
+
+    # Check for GCP-compatible providers
+    if is_gcp_compatible(url):
+        return UrlType.GCP
+
+    # Check for Azure-compatible providers
+    if is_azure_compatible(url):
+        return UrlType.AZURE
+
+    # Default to generic if no patterns match
+    return UrlType.GENERIC
+
+
 def build_range_header(
     byte_range: range | None = None,
     start: int | None = None,

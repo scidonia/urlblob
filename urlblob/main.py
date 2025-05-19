@@ -2,13 +2,45 @@ import sys
 import json
 import asyncio
 import typer
-from typing import Optional
+from typing import Annotated, Optional, Callable
 from httpx import AsyncClient
 from rich.console import Console
 from rich.table import Table
 from urlblob.blob import UrlBlob
+from urlblob.util import UrlType
+
+
+# Create a state object to hold the URL type
+class AppState:
+    url_type: Optional[UrlType] = None
+
+
+state = AppState()
+
+url_type_option = typer.Option(
+    None,
+    "--url-type",
+    "-u",
+    help="Override URL type detection (s3, gcp, azure, generic)",
+)
+
+
+def url_type_callback(url_type: Optional[str] = url_type_option) -> Optional[UrlType]:
+    """Process the URL type option and store it in the state."""
+    if url_type is None:
+        return None
+
+    try:
+        from urlblob.util import parse_url_type
+
+        state.url_type = parse_url_type(url_type)
+        return state.url_type
+    except ValueError as e:
+        raise typer.BadParameter(str(e))
+
 
 app = typer.Typer(help="URL Blob - A tool for working with URL data")
+app.callback()(url_type_callback)
 
 
 @app.command()
@@ -70,7 +102,7 @@ def get(
             range_start, range_end = start, end
 
         async with AsyncClient() as client:
-            blob = UrlBlob(url, client)
+            blob = UrlBlob(url, client, url_type=state.url_type)
             content = await blob.get(start=range_start, end=range_end)
 
             if output:
@@ -101,7 +133,7 @@ def stat(
 
     async def get_stats():
         async with AsyncClient() as client:
-            blob = UrlBlob(url, client)
+            blob = UrlBlob(url, client, url_type=state.url_type)
             stats = await blob.stat()
             stats_dict = stats.to_dict()
 

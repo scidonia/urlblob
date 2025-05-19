@@ -14,6 +14,15 @@ The UrlBlob library provides a consistent interface for working with files store
 
 The library also includes a CLI for convenient access to its functionality:
 
+### Global Options
+
+```bash
+# Override URL type detection
+urlblob --url-type aws_s3 [command] [args]
+```
+
+Available URL types: `s3` (aliases: `aws`, `aws_s3`), `gcp` (aliases: `google`), `azure` (alias: `az`), `generic`
+
 ### Upload content to a URL
 
 ```bash
