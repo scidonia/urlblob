@@ -19,4 +19,4 @@ dev = [
 ]
 
 [project.scripts]
-hello = "urlblob.main:main"
+urlblob = "urlblob.main:main"
