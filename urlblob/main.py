@@ -1,8 +1,11 @@
 import sys
+import json
 import asyncio
 import typer
 from typing import Optional
 from httpx import AsyncClient
+from rich.console import Console
+from rich.table import Table
 from urlblob.blob import UrlBlob
 
 app = typer.Typer(help="URL Blob - A tool for working with URL data")
@@ -88,10 +91,50 @@ def get(
 
 
 @app.command()
-def stat(url: str = typer.Argument(..., help="URL to get information about")):
+def stat(
+    url: str = typer.Argument(..., help="URL to get information about"),
+    json_output: bool = typer.Option(
+        False, "--json", "-j", help="Output in JSON format"
+    ),
+):
     """Get information about a file at a URL."""
-    typer.echo(f"Getting information about {url}")
-    # Implementation will go here
+
+    async def get_stats():
+        async with AsyncClient() as client:
+            blob = UrlBlob(url, client)
+            stats = await blob.stat()
+            stats_dict = stats.to_dict()
+
+            if json_output:
+                # Output as JSON
+                print(json.dumps(stats_dict, indent=2))
+            else:
+                # Output as a nice table using Rich
+                console = Console()
+                table = Table()
+
+                table.add_column("Property", style="cyan")
+                table.add_column("Value", style="green")
+
+                for key, value in stats_dict.items():
+                    # Format size in a human-readable way if it's the size property
+                    if key == "size" and isinstance(value, int):
+                        # Convert to KB, MB, GB as appropriate
+                        if value < 1024:
+                            formatted_value = f"{value} bytes"
+                        elif value < 1024 * 1024:
+                            formatted_value = f"{value / 1024:.2f} KB"
+                        elif value < 1024 * 1024 * 1024:
+                            formatted_value = f"{value / (1024 * 1024):.2f} MB"
+                        else:
+                            formatted_value = f"{value / (1024 * 1024 * 1024):.2f} GB"
+                        table.add_row(key, f"{value} ({formatted_value})")
+                    else:
+                        table.add_row(key, str(value))
+
+                console.print(table)
+
+    asyncio.run(get_stats())
 
 
 def main():
