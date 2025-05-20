@@ -119,21 +119,99 @@ def parse_azure_error(response):
     return error_type(**data)
 
 
+def parse_s3_error(response):
+    """
+    Parse an S3 error response into an appropriate BlobError.
+
+    Args:
+        response: The HTTP response object from httpx.
+
+    Returns:
+        An appropriate BlobError subclass instance.
+    """
+    status_code = response.status_code
+    content = response.content
+    reason = response.reason_phrase
+
+    # Default values
+    message = None
+    code = None
+    raw_data = content.decode("utf-8", errors="replace")
+
+    try:
+        # Parse XML content
+        root = ET.parse(BytesIO(content)).getroot()
+
+        # S3 error responses typically have Code and Message elements
+        code_elem = root.find(".//Code")
+        message_elem = root.find(".//Message")
+
+        if code_elem is not None:
+            code = code_elem.text
+
+        if message_elem is not None:
+            message = message_elem.text
+    except Exception:
+        # If XML parsing fails, use raw content
+        pass
+
+    data = {
+        "url_type": UrlType.S3,
+        "status_code": status_code,
+        "reason": reason,
+        "message": message,
+        "raw_data": raw_data,
+    }
+
+    # Map common S3 error codes to appropriate error types
+    error_type = NonRetryableBlobError
+    if status_code == 404:
+        if code == "NoSuchBucket":
+            error_type = ContainerNotFoundError
+        else:
+            error_type = BlobNotFoundError
+    elif status_code == 403:
+        data["extra_info"] = code
+        error_type = AuthenticationFailedError
+    elif status_code >= 500:
+        error_type = RetryableBlobError
+
+    return error_type(**data)
+
+
+def parse_generic_error(response: Response, url_type: UrlType) -> BlobError:
+    """
+    Parse a generic error response into an appropriate BlobError.
+
+    Args:
+        response: The HTTP response object from httpx.
+        url_type: The type of URL (Generic, GCP, etc.)
+
+    Returns:
+        An appropriate BlobError subclass instance.
+    """
+    data = {
+        "url_type": url_type,
+        "status_code": response.status_code,
+        "reason": response.reason_phrase,
+        "raw_data": response.content.decode("utf-8", errors="replace"),
+    }
+
+    error_type = NonRetryableBlobError
+    if response.status_code == 403:
+        error_type = AuthenticationFailedError
+    elif response.status_code == 404:
+        error_type = BlobNotFoundError
+    elif response.status_code >= 500:
+        error_type = RetryableBlobError
+
+    return error_type(**data)
+
+
 def parse_error(response: Response, url_type: UrlType) -> BlobError:
     if url_type == UrlType.AZURE:
         return parse_azure_error(response)
+    elif url_type == UrlType.S3:
+        return parse_s3_error(response)
     else:
-        data = {
-            "url_type": url_type,
-            "status_code": response.status_code,
-            "reason": response.reason_phrase,
-            "raw_data": response.content.decode("utf-8", errors="replace"),
-        }
-        if response.status_code == 403:
-            return AuthenticationFailedError(**data)
-        elif response.status_code == 404:
-            return BlobNotFoundError(**data)
-        elif response.status_code >= 500:
-            return RetryableBlobError(**data)
-        else:
-            return NonRetryableBlobError(**data)
+        return parse_generic_error(response, url_type)

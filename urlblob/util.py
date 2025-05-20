@@ -11,6 +11,7 @@ _S3_COMPATIBLE_PATTERNS = [
     for pattern in [
         r"\.s3\.[a-z0-9-]+\.amazonaws\.com",
         r"s3\.amazonaws\.com",
+        r"\.your-objectstorage.com",  # hetzner
     ]
 ]
 
