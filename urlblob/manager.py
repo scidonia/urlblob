@@ -12,3 +12,15 @@ class UrlBlobManager:
 
     def from_url(self, url: str, url_type: UrlType | None = None) -> UrlBlob:
         return UrlBlob(url, self._client, url_type=url_type)
+
+    async def close(self) -> None:
+        """Close the underlying httpx Client."""
+        await self._client.aclose()
+
+    async def __enter__(self) -> "UrlBlobManager":
+        """Support for context manager protocol."""
+        return self
+
+    async def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close the client when exiting the context."""
+        await self.close()

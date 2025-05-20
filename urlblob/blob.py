@@ -1,6 +1,6 @@
 from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
-from .util import build_range_header, detect_url_type, validate_response
+from .util import build_get_headers, detect_url_type, validate_response
 from .common import UrlType
 
 from typing import IO, AsyncIterator, Iterator, Union, AsyncIterable, Iterable, List
@@ -35,12 +35,32 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> bytes:
-        headers = build_range_header(byte_range, start, end)
+        headers = build_get_headers(byte_range, start, end)
 
         response = await self._client.get(self._url, headers=headers)
         await validate_response(response, self._url_type)
 
         return response.content
+
+    async def get_lines(
+        self,
+        byte_range: range | None = None,
+        start: int | None = None,
+        end: int | None = None,
+    ) -> List[str]:
+        """
+        Download the blob content and split it into lines.
+
+        Args:
+            byte_range: Optional range of bytes to download.
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range).
+
+        Returns:
+            List[str]: The downloaded content split into lines.
+        """
+        content = await self.get(byte_range, start, end)
+        return content.decode("utf-8").splitlines()
 
     async def stream(
         self,
@@ -48,7 +68,7 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> AsyncIterator[bytes]:
-        headers = build_range_header(byte_range, start, end)
+        headers = build_get_headers(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
             await validate_response(response, self._url_type)
@@ -61,7 +81,7 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> AsyncIterator[str]:
-        headers = build_range_header(byte_range, start, end)
+        headers = build_get_headers(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
             await validate_response(response, self._url_type)

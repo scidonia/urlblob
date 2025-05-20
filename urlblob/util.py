@@ -153,7 +153,7 @@ def detect_url_type(url: str) -> UrlType:
     return UrlType.GENERIC
 
 
-def build_range_header(
+def build_get_headers(
     byte_range: range | None = None,
     start: int | None = None,
     end: int | None = None,
@@ -239,5 +239,22 @@ async def validate_response(response, url_type: UrlType):
     """
     if not response.is_success:
         await response.aread()
+
+        raise parse_error(response, url_type)
+
+
+def sync_validate_response(response, url_type: UrlType):
+    """
+    Validate the HTTP response and raise appropriate errors based on the URL type.
+
+    Args:
+        response: The HTTP response object from httpx.
+        url_type: The type of URL (S3, GCP, Azure, etc.)
+
+    Raises:
+        BlobError: If the response indicates an error, with details specific to the provider.
+    """
+    if not response.is_success:
+        response.read()
 
         raise parse_error(response, url_type)
