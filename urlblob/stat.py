@@ -32,7 +32,11 @@ class UrlBlobStats:
         Raises:
             ValueError: If Content-Length header is present but invalid.
         """
-        content_length = self._headers.get("Content-Length")
+        content_range = self._headers.get("Content-Range")
+        if content_range:
+            content_length = content_range.split("/")[-1]
+        else:
+            content_length = self._headers.get("Content-Length")
         if content_length is not None:
             return int(content_length)
         return None

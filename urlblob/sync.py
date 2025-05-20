@@ -41,9 +41,11 @@ class SyncUrlBlob:
         Returns:
             UrlBlobStats: Statistics about the blob.
         """
-        response = self._client.head(self.url)
+        headers = build_get_headers(None, 0, 0)
+        response = self._client.get(self.url, headers=headers)
         sync_validate_response(response, self.url_type)
-        return UrlBlobStats(response.headers)
+        response.close()
+        return UrlBlobStats(headers=response.headers)
 
     def get(
         self,

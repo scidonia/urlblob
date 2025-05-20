@@ -1,3 +1,4 @@
+from click import Tuple
 from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
 from .util import build_get_headers, detect_url_type, validate_response
@@ -25,8 +26,12 @@ class UrlBlob:
         self._url_type = url_type if url_type is not None else detect_url_type(url)
 
     async def stat(self) -> UrlBlobStats:
-        response = await self._client.head(self._url)
+        # get a single byte of data, which should work on all platforms
+        headers = build_get_headers(None, 0, 0)
+        response = await self._client.get(self._url, headers=headers)
         await validate_response(response, self._url_type)
+        await response.aclose()
+
         return UrlBlobStats(headers=response.headers)
 
     async def get(
@@ -39,6 +44,7 @@ class UrlBlob:
 
         response = await self._client.get(self._url, headers=headers)
         await validate_response(response, self._url_type)
+        await response.aclose()
 
         return response.content
 
