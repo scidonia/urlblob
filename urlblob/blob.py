@@ -1,6 +1,7 @@
 from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
-from .util import build_range_header, detect_url_type, UrlType
+from .util import build_range_header, detect_url_type, validate_response
+from .common import UrlType
 
 from typing import IO, AsyncIterator, Iterator, Union, AsyncIterable, Iterable, List
 
@@ -25,6 +26,7 @@ class UrlBlob:
 
     async def stat(self) -> UrlBlobStats:
         response = await self._client.head(self._url)
+        await validate_response(response, self._url_type)
         return UrlBlobStats(headers=response.headers)
 
     async def get(
@@ -36,6 +38,7 @@ class UrlBlob:
         headers = build_range_header(byte_range, start, end)
 
         response = await self._client.get(self._url, headers=headers)
+        await validate_response(response, self._url_type)
 
         return response.content
 
@@ -48,6 +51,7 @@ class UrlBlob:
         headers = build_range_header(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
+            await validate_response(response, self._url_type)
             async for chunk in response.aiter_bytes():
                 yield chunk
 
@@ -56,10 +60,11 @@ class UrlBlob:
         byte_range: range | None = None,
         start: int | None = None,
         end: int | None = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncIterator[str]:
         headers = build_range_header(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
+            await validate_response(response, self._url_type)
             async for line in response.aiter_lines():
                 yield line
 
@@ -93,13 +98,7 @@ class UrlBlob:
 
         headers = build_put_headers(url_type=self._url_type, content_type=content_type)
         response = await self._client.put(self._url, content=content, headers=headers)
-
-        # Check if the upload was successful (2xx status codes)
-        if not response.is_success:
-            error_msg = f"Upload failed with status {response.status_code}"
-            error_details = response.text
-            error_msg += f": {error_details}"
-            raise ValueError(error_msg)
+        await validate_response(response, self._url_type)
 
     async def put_lines(
         self,

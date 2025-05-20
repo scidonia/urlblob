@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from rich.console import Console
 from rich.table import Table
 from urlblob.blob import UrlBlob
-from urlblob.util import UrlType
+from urlblob.common import UrlType
 
 
 # Create a state object to hold the URL type
@@ -93,6 +93,9 @@ def get(
     lines: bool = typer.Option(
         False, "--lines", "-l", help="Process content as lines of text"
     ),
+    no_stream: bool = typer.Option(
+        False, "--no-stream", help="Download entire file at once instead of streaming"
+    ),
 ):
     """Download a file from a URL."""
 
@@ -126,7 +129,25 @@ def get(
             total_bytes = 0
             line_count = 0
 
-            if lines:
+            if no_stream:
+                # Use get() instead of stream()
+                content = await blob.get(start=range_start, end=range_end)
+                total_bytes = len(content)
+
+                if output:
+                    with open(output, "wb") as f:
+                        f.write(content)
+                    typer.echo(f"Downloaded {total_bytes} bytes to {output}", err=True)
+                else:
+                    # Try to decode as text for stdout, fallback to reporting size for binary
+                    try:
+                        sys.stdout.write(content.decode())
+                    except UnicodeDecodeError:
+                        typer.echo(
+                            f"Downloaded {total_bytes} bytes of binary data (use -o to save to file)",
+                            err=True,
+                        )
+            elif lines:
                 # Process as lines of text
                 if output:
                     with open(output, "w", encoding="utf-8") as f:

@@ -1,16 +1,8 @@
-from enum import Enum, auto
 import re
 from typing import Optional
 from itertools import chain
-
-
-class UrlType(Enum):
-    """Enum representing different cloud provider URL types."""
-
-    S3 = auto()
-    GCP = auto()
-    AZURE = auto()
-    GENERIC = auto()
+from .common import UrlType
+from .error import parse_error
 
 
 # Precompiled regexes for S3-compatible services
@@ -231,3 +223,20 @@ def build_put_headers(
         headers["x-ms-blob-type"] = "BlockBlob"
 
     return headers
+
+
+async def validate_response(response, url_type: UrlType):
+    """
+    Validate the HTTP response and raise appropriate errors based on the URL type.
+
+    Args:
+        response: The HTTP response object from httpx.
+        url_type: The type of URL (S3, GCP, Azure, etc.)
+
+    Raises:
+        BlobError: If the response indicates an error, with details specific to the provider.
+    """
+    if not response.is_success:
+        await response.aread()
+
+        raise parse_error(response, url_type)
