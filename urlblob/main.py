@@ -52,6 +52,9 @@ def put(
     content_type: Optional[str] = typer.Option(
         "text/plain", "--content-type", "-t", help="Content type of the data"
     ),
+    lines: bool = typer.Option(
+        False, "--lines", "-l", help="Process content as lines of text"
+    ),
 ):
     """Upload content to a URL."""
     if content is None:
@@ -61,7 +64,16 @@ def put(
     async def upload():
         async with AsyncClient() as client:
             blob = UrlBlob(url, client, url_type=state.url_type)
-            await blob.put(content=content, content_type=content_type)
+
+            if lines:
+                # Split content into lines and use put_lines
+                content_lines = content.splitlines()
+                await blob.put_lines(lines=content_lines, content_type=content_type)
+                typer.echo(f"Uploaded {len(content_lines)} lines to {url}", err=True)
+            else:
+                # Use regular put
+                await blob.put(content=content, content_type=content_type)
+                typer.echo(f"Uploaded content to {url}", err=True)
 
     asyncio.run(upload())
 

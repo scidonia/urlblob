@@ -2,7 +2,7 @@ from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
 from .util import build_range_header, detect_url_type, UrlType
 
-from typing import IO, AsyncIterator
+from typing import IO, AsyncIterator, Iterator, Union, AsyncIterable, Iterable, List
 
 
 class UrlBlob:
@@ -65,14 +65,24 @@ class UrlBlob:
 
     async def put(
         self,
-        content: str | bytes | IO[str] | IO[bytes],
+        content: Union[
+            str,
+            bytes,
+            IO[str],
+            IO[bytes],
+            Iterator[bytes],
+            AsyncIterator[bytes],
+            Iterable[bytes],
+            AsyncIterable[bytes],
+        ],
         content_type: str | None = None,
     ) -> None:
         """
         Upload content to the URL using HTTP PUT.
 
         Args:
-            content: The content to upload. Can be a string, bytes, or a file-like object.
+            content: The content to upload. Can be a string, bytes, file-like object,
+                    or an iterator/async iterator over bytes.
             content_type: Optional content type header to set. If not provided,
                           the server will determine the content type.
 
@@ -90,3 +100,78 @@ class UrlBlob:
             error_details = response.text
             error_msg += f": {error_details}"
             raise ValueError(error_msg)
+
+    async def put_lines(
+        self,
+        lines: Union[
+            List[str],
+            List[bytes],
+            Iterator[str],
+            AsyncIterator[str],
+            Iterable[str],
+            AsyncIterable[str],
+            Iterator[bytes],
+            AsyncIterator[bytes],
+            Iterable[bytes],
+            AsyncIterable[bytes],
+        ],
+        content_type: str | None = None,
+    ) -> None:
+        """
+        Upload content to the URL using HTTP PUT, with each item in the input
+        separated by newlines.
+
+        Args:
+            lines: The lines to upload. Can be a list of strings/bytes,
+                  or an iterator/async iterator over strings/bytes.
+            content_type: Optional content type header to set. If not provided,
+                          the server will determine the content type.
+
+        Raises:
+            ValueError: If the upload fails with details about the error.
+        """
+        # Handle different types of input
+        if isinstance(lines, (list, tuple)):
+            # For lists/tuples, join with newlines
+            if all(isinstance(line, str) for line in lines):
+                content = "\n".join(lines)
+            else:
+                # Convert bytes to a single bytes object with newlines
+                content = b"\n".join(
+                    line if isinstance(line, bytes) else line.encode() for line in lines
+                )
+
+            # Use the existing put method
+            await self.put(content=content, content_type=content_type)
+        else:
+            # For iterators/iterables, create an async generator that adds newlines
+            async def line_generator():
+                newline = b"\n"
+                is_first = True
+
+                # Handle both sync and async iterables
+                if hasattr(lines, "__aiter__"):
+                    async for line in lines:
+                        if not is_first:
+                            yield newline
+                        else:
+                            is_first = False
+
+                        if isinstance(line, str):
+                            yield line.encode()
+                        else:
+                            yield line
+                else:
+                    for line in lines:
+                        if not is_first:
+                            yield newline
+                        else:
+                            is_first = False
+
+                        if isinstance(line, str):
+                            yield line.encode()
+                        else:
+                            yield line
+
+            # Use the existing put method with the generator
+            await self.put(content=line_generator(), content_type=content_type)
