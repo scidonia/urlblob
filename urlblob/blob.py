@@ -2,7 +2,7 @@ from httpx import AsyncClient, Headers
 from .stat import UrlBlobStats
 from .util import build_range_header, detect_url_type, UrlType
 
-from typing import IO
+from typing import IO, AsyncIterator
 
 
 class UrlBlob:
@@ -38,6 +38,30 @@ class UrlBlob:
         response = await self._client.get(self._url, headers=headers)
 
         return response.content
+
+    async def stream(
+        self,
+        byte_range: range | None = None,
+        start: int | None = None,
+        end: int | None = None,
+    ) -> AsyncIterator[bytes]:
+        headers = build_range_header(byte_range, start, end)
+
+        async with self._client.stream("GET", self._url, headers=headers) as response:
+            async for chunk in response.aiter_bytes():
+                yield chunk
+
+    async def stream_lines(
+        self,
+        byte_range: range | None = None,
+        start: int | None = None,
+        end: int | None = None,
+    ) -> AsyncIterator[bytes]:
+        headers = build_range_header(byte_range, start, end)
+
+        async with self._client.stream("GET", self._url, headers=headers) as response:
+            async for line in response.aiter_lines():
+                yield line
 
     async def put(
         self,

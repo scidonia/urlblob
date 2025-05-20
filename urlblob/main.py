@@ -78,6 +78,9 @@ def get(
     output: Optional[str] = typer.Option(
         None, "--output", "-o", help="Output file (default: stdout)"
     ),
+    lines: bool = typer.Option(
+        False, "--lines", "-l", help="Process content as lines of text"
+    ),
 ):
     """Download a file from a URL."""
 
@@ -106,21 +109,53 @@ def get(
 
         async with AsyncClient() as client:
             blob = UrlBlob(url, client, url_type=state.url_type)
-            content = await blob.get(start=range_start, end=range_end)
 
-            if output:
-                with open(output, "wb") as f:
-                    f.write(content)
-                typer.echo(f"Downloaded {len(content)} bytes to {output}", err=True)
+            # Use streaming to process data as it's downloaded
+            total_bytes = 0
+            line_count = 0
+
+            if lines:
+                # Process as lines of text
+                if output:
+                    with open(output, "w", encoding="utf-8") as f:
+                        async for line in blob.stream_lines(
+                            start=range_start, end=range_end
+                        ):
+                            f.write(line + "\n")
+                            line_count += 1
+                    typer.echo(f"Downloaded {line_count} lines to {output}", err=True)
+                else:
+                    async for line in blob.stream_lines(
+                        start=range_start, end=range_end
+                    ):
+                        sys.stdout.write(line + "\n")
+                        line_count += 1
             else:
-                # Try to decode as text for stdout, fallback to reporting size for binary
-                try:
-                    sys.stdout.write(content.decode())
-                except UnicodeDecodeError:
-                    typer.echo(
-                        f"Downloaded {len(content)} bytes of binary data (use -o to save to file)",
-                        err=True,
-                    )
+                # Process as raw bytes
+                if output:
+                    with open(output, "wb") as f:
+                        async for chunk in blob.stream(
+                            start=range_start, end=range_end
+                        ):
+                            f.write(chunk)
+                            total_bytes += len(chunk)
+                    typer.echo(f"Downloaded {total_bytes} bytes to {output}", err=True)
+                else:
+                    # For stdout, collect chunks to try decoding as text at the end
+                    chunks = []
+                    async for chunk in blob.stream(start=range_start, end=range_end):
+                        chunks.append(chunk)
+                        total_bytes += len(chunk)
+
+                    content = b"".join(chunks)
+                    # Try to decode as text for stdout, fallback to reporting size for binary
+                    try:
+                        sys.stdout.write(content.decode())
+                    except UnicodeDecodeError:
+                        typer.echo(
+                            f"Downloaded {total_bytes} bytes of binary data (use -o to save to file)",
+                            err=True,
+                        )
 
     asyncio.run(download())
 
