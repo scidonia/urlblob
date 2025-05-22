@@ -1,10 +1,12 @@
-from click import Tuple
-from httpx import AsyncClient, Headers
+# Copyright 2025 Scidonia Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+
+from httpx import AsyncClient
 from .stat import UrlBlobStats
 from .util import build_get_headers, detect_url_type, validate_response
 from .common import UrlType
 
-from typing import IO, AsyncIterator, Iterator, Union, AsyncIterable, Iterable, List
+from typing import AsyncIterator, Iterator, Union, AsyncIterable, Iterable, List, cast
 
 
 class UrlBlob:
@@ -26,6 +28,12 @@ class UrlBlob:
         self._url_type = url_type if url_type is not None else detect_url_type(url)
 
     async def stat(self) -> UrlBlobStats:
+        """
+        Get statistics about the blob.
+
+        Returns:
+            UrlBlobStats: Statistics about the blob.
+        """
         # get a single byte of data, which should work on all platforms
         headers = build_get_headers(None, 0, 0)
         response = await self._client.get(self._url, headers=headers)
@@ -40,6 +48,17 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> bytes:
+        """
+        Download the blob content.
+
+        Args:
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
+
+        Returns:
+            bytes: The downloaded content.
+        """
         headers = build_get_headers(byte_range, start, end)
 
         response = await self._client.get(self._url, headers=headers)
@@ -58,9 +77,9 @@ class UrlBlob:
         Download the blob content and split it into lines.
 
         Args:
-            byte_range: Optional range of bytes to download.
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
             start: Optional start byte position (alternative to byte_range).
-            end: Optional end byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
 
         Returns:
             List[str]: The downloaded content split into lines.
@@ -74,6 +93,17 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> AsyncIterator[bytes]:
+        """
+        Stream the blob content as chunks of bytes.
+
+        Args:
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
+
+        Returns:
+            AsyncIterator[bytes]: An async iterator yielding chunks of bytes.
+        """
         headers = build_get_headers(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
@@ -87,6 +117,17 @@ class UrlBlob:
         start: int | None = None,
         end: int | None = None,
     ) -> AsyncIterator[str]:
+        """
+        Stream the blob content as lines of text.
+
+        Args:
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
+
+        Returns:
+            AsyncIterator[str]: An async iterator yielding lines of text.
+        """
         headers = build_get_headers(byte_range, start, end)
 
         async with self._client.stream("GET", self._url, headers=headers) as response:
@@ -99,8 +140,6 @@ class UrlBlob:
         content: Union[
             str,
             bytes,
-            IO[str],
-            IO[bytes],
             Iterator[bytes],
             AsyncIterator[bytes],
             Iterable[bytes],
@@ -158,13 +197,10 @@ class UrlBlob:
         # Handle different types of input
         if isinstance(lines, (list, tuple)):
             # For lists/tuples, join with newlines
-            if all(isinstance(line, str) for line in lines):
-                content = "\n".join(lines)
-            else:
-                # Convert bytes to a single bytes object with newlines
-                content = b"\n".join(
-                    line if isinstance(line, bytes) else line.encode() for line in lines
-                )
+            # Convert bytes to a single bytes object with newlines
+            content = b"\n".join(
+                line if isinstance(line, bytes) else line.encode() for line in lines
+            )
 
             # Use the existing put method
             await self.put(content=content, content_type=content_type)
@@ -176,7 +212,8 @@ class UrlBlob:
 
                 # Handle both sync and async iterables
                 if hasattr(lines, "__aiter__"):
-                    async for line in lines:
+                    lines_iterable = cast(AsyncIterable[str | bytes], lines)
+                    async for line in lines_iterable:
                         if not is_first:
                             yield newline
                         else:
@@ -187,7 +224,8 @@ class UrlBlob:
                         else:
                             yield line
                 else:
-                    for line in lines:
+                    lines_iterable = cast(Iterable[str | bytes], lines)
+                    for line in lines_iterable:
                         if not is_first:
                             yield newline
                         else:

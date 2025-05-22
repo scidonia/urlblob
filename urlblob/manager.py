@@ -1,3 +1,6 @@
+# Copyright 2025 Scidonia Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 from httpx import AsyncClient
 
 from urlblob.common import UrlType
@@ -11,6 +14,16 @@ class UrlBlobManager:
         self._client = AsyncClient(http2=True)
 
     def from_url(self, url: str, url_type: UrlType | None = None) -> UrlBlob:
+        """
+        Create a UrlBlob from a URL.
+
+        Args:
+            url: The URL of the blob.
+            url_type: Optional URL type override. If not provided, it will be detected.
+
+        Returns:
+            UrlBlob: A new UrlBlob instance.
+        """
         return UrlBlob(url, self._client, url_type=url_type)
 
     async def close(self) -> None:

@@ -10,7 +10,7 @@ All the major cloud providers offer a way to hand out URLs to objects in a bucke
 
 The UrlBlob library provides a consistent interface for working with files stored in various cloud providers through presigned URLs.
 
-### Basic Usage
+### Basic Usage (Async API)
 
 ```python
 import asyncio
@@ -37,6 +37,36 @@ async def main():
 asyncio.run(main())
 ```
 
+### Synchronous API
+
+For applications that don't use async/await, UrlBlob provides a synchronous API with identical functionality:
+
+```python
+from urlblob import SyncUrlBlobManager
+
+# Create a manager
+manager = SyncUrlBlobManager()
+
+# Get a blob from a URL
+blob = manager.from_url("https://example.com/path/to/file")
+
+# Get file stats
+stats = blob.stat()
+print(f"File size: {stats.size()} bytes")
+print(f"Content type: {stats.content_type()}")
+
+# Download content
+content = blob.get()
+
+# Upload content
+blob.put("Hello, world!", content_type="text/plain")
+
+# Use context manager for automatic cleanup
+with SyncUrlBlobManager() as manager:
+    blob = manager.from_url("https://example.com/path/to/file")
+    # Work with blob...
+```
+
 ### API Reference
 
 #### UrlBlobManager
@@ -59,9 +89,11 @@ stats = await blob.stat()
 content = await blob.get()
 
 # Download a byte range
-content = await blob.get(start=0, end=1024)
-# or
-content = await blob.get(byte_range=range(0, 1024))
+# Note: byte_range is end-exclusive (like Python's range)
+content = await blob.get(byte_range=range(0, 1024))  # Gets bytes 0-1023 (1024 bytes)
+
+# While start/end parameters are end-inclusive
+content = await blob.get(start=0, end=1023)  # Also gets bytes 0-1023 (1024 bytes)
 
 # Stream file content
 async for chunk in blob.stream():
@@ -108,7 +140,7 @@ The library also includes a CLI for convenient access to its functionality:
 
 ```bash
 # Override URL type detection
-urlblob --url-type aws_s3 [command] [args]
+urlblob --url-type s3 [command] [args]
 ```
 
 Available URL types: `s3` (aliases: `aws`, `aws_s3`), `gcp` (aliases: `google`), `azure` (alias: `az`), `generic`
@@ -142,7 +174,7 @@ Options:
 # Download entire file
 urlblob get https://example.com/path/to/file
 
-# Download with byte range
+# Download with byte range (ranges are inclusive for CLI, e.g. 0-1024 gets 1025 bytes)
 urlblob get https://example.com/path/to/file 0-1024
 urlblob get https://example.com/path/to/file 1024-
 urlblob get https://example.com/path/to/file -1024

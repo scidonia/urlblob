@@ -1,6 +1,7 @@
+# Copyright 2025 Scidonia Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import re
-from typing import Optional
-from itertools import chain
 from .common import UrlType
 from .error import parse_error
 
@@ -135,7 +136,7 @@ def detect_url_type(url: str) -> UrlType:
         url: The URL to analyze.
 
     Returns:
-        UrlType: The detected URL type.
+        UrlType: The detected URL type (S3, GCP, AZURE, or GENERIC).
     """
     # Check for S3-compatible providers
     if is_s3_compatible(url):
@@ -162,9 +163,9 @@ def build_get_headers(
     Build a headers dictionary with Range header if needed.
 
     Args:
-        byte_range: Python range object to use for byte range.
+        byte_range: Python range object to use for byte range (end-exclusive).
         start: Start byte position.
-        end: End byte position.
+        end: End byte position (end-inclusive, unlike byte_range).
 
     Returns:
         Dictionary with Range header if range parameters are provided.
@@ -236,6 +237,7 @@ async def validate_response(response, url_type: UrlType):
 
     Raises:
         BlobError: If the response indicates an error, with details specific to the provider.
+            May raise specific subclasses like BlobNotFoundError, AuthenticationFailedError, etc.
     """
     if not response.is_success:
         await response.aread()
@@ -246,6 +248,7 @@ async def validate_response(response, url_type: UrlType):
 def sync_validate_response(response, url_type: UrlType):
     """
     Validate the HTTP response and raise appropriate errors based on the URL type.
+    Synchronous version of validate_response.
 
     Args:
         response: The HTTP response object from httpx.
@@ -253,6 +256,7 @@ def sync_validate_response(response, url_type: UrlType):
 
     Raises:
         BlobError: If the response indicates an error, with details specific to the provider.
+            May raise specific subclasses like BlobNotFoundError, AuthenticationFailedError, etc.
     """
     if not response.is_success:
         response.read()

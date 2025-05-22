@@ -1,8 +1,11 @@
+# Copyright 2025 Scidonia Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 """
 Synchronous versions of the UrlBlob and UrlBlobManager classes.
 """
 
-from typing import Union, List, Iterator, Iterable, IO, Optional
+from typing import Union, List, Iterator, Iterable
 import httpx
 from io import BytesIO
 
@@ -57,9 +60,9 @@ class SyncUrlBlob:
         Download the blob content.
 
         Args:
-            byte_range: Optional range of bytes to download.
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
             start: Optional start byte position (alternative to byte_range).
-            end: Optional end byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
 
         Returns:
             bytes: The downloaded content.
@@ -80,9 +83,9 @@ class SyncUrlBlob:
         Download the blob content and split it into lines.
 
         Args:
-            byte_range: Optional range of bytes to download.
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
             start: Optional start byte position (alternative to byte_range).
-            end: Optional end byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
 
         Returns:
             List[str]: The downloaded content split into lines.
@@ -95,8 +98,6 @@ class SyncUrlBlob:
         content: Union[
             str,
             bytes,
-            IO[str],
-            IO[bytes],
             Iterator[bytes],
             Iterable[bytes],
         ],
@@ -106,8 +107,8 @@ class SyncUrlBlob:
         Upload content to the URL using HTTP PUT.
 
         Args:
-            content: The content to upload. Can be a string, bytes, file-like object,
-                    or an iterator over bytes.
+            content: The content to upload. Can be a string, bytes,
+                    or an iterator over string or bytes.
             content_type: Optional content type header to set. If not provided,
                           the server will determine the content type.
         """
@@ -116,15 +117,6 @@ class SyncUrlBlob:
         # Convert string to bytes if needed
         if isinstance(content, str):
             content = content.encode("utf-8")
-
-        # Handle file-like objects
-        if hasattr(content, "read"):
-            if hasattr(content, "encoding"):
-                # Text file
-                content = content.read().encode("utf-8")
-            else:
-                # Binary file
-                content = content.read()
 
         # Handle iterators/iterables by collecting into bytes
         if isinstance(content, (Iterator, Iterable)) and not isinstance(

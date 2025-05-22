@@ -74,8 +74,13 @@
           };
           uvpart = {
             workspaceRoot = ./.;
-            python = pkgs.python312;
-            extraPackages = [ pkgs.hello ];
+            python = pkgs.python310;
+            extraPackages = with pkgs.python3Packages; [
+              ipython
+              ruff
+              black
+              pkgs.pyright
+            ];
           };
         };
     };

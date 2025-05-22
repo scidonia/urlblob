@@ -1,13 +1,20 @@
+# Copyright 2025 Scidonia Limited
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 import sys
 import json
 import asyncio
-import typer
-from typing import Annotated, Optional, Callable
+from typing import Optional, cast
 from httpx import AsyncClient
-from rich.console import Console
-from rich.table import Table
 from urlblob.blob import UrlBlob
 from urlblob.common import UrlType
+
+try:
+    import typer
+    from rich.console import Console
+    from rich.table import Table
+except ImportError:
+    raise RuntimeError("The CLI requires the 'cli' extra: pip install urlblob[cli]")
 
 
 # Create a state object to hold the URL type
@@ -61,6 +68,9 @@ def put(
         # Read from stdin if no content provided
         content = sys.stdin.read()
 
+    # content is now a string for sure
+    content = cast(str, content)
+
     async def upload():
         async with AsyncClient() as client:
             blob = UrlBlob(url, client, url_type=state.url_type)
@@ -83,7 +93,7 @@ def get(
     url: str = typer.Argument(..., help="URL to download from"),
     range_str: Optional[str] = typer.Argument(
         None,
-        help="Byte range in format 'start-end', 'start-', or '-end'",
+        help="Byte range in format 'start-end', 'start-', or '-end' (end is inclusive)",
     ),
     start: Optional[int] = typer.Option(None, help="Start byte position"),
     end: Optional[int] = typer.Option(None, help="End byte position"),
