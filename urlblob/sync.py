@@ -93,7 +93,7 @@ class SyncUrlBlob:
         content = self.get(byte_range, start, end)
         return content.decode("utf-8").splitlines()
 
-    def get_valid_string(
+    def grow_to_valid_string(
         self,
         byte_range: range | None = None,
         start: int | None = None,
@@ -177,6 +177,54 @@ class SyncUrlBlob:
 
         # If we got here, we hit a break condition in the loop above. Fall back to decode with replace
         return original_fragment.decode("utf-8", errors="replace")
+
+    def shrink_to_valid_string(
+        self,
+        byte_range: range | None = None,
+        start: int | None = None,
+        end: int | None = None,
+    ) -> str:
+        """
+        Download blob content as a valid UTF-8 string, handling partial UTF-8 sequences
+        at range boundaries by shrinking the range as needed.
+
+        Args:
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
+
+        Returns:
+            str: The downloaded content as a valid UTF-8 string.
+        """
+        # If no range specified, get everything and use replace for invalid sequences
+        if byte_range is None and start is None and end is None:
+            content = self.get()
+            return content.decode("utf-8", errors="replace")
+
+        # Convert byte_range to start/end if provided
+        if byte_range is not None:
+            range_start = byte_range.start if byte_range.start is not None else 0
+            # Convert end-exclusive range to end-inclusive for consistency with other methods
+            range_end = byte_range.stop - 1 if byte_range.stop is not None else None
+        else:
+            range_start = start
+            range_end = end
+
+        # Get the initial fragment
+        fragment = self.get(start=range_start, end=range_end)
+
+        while True:
+            try:
+                return fragment.decode("utf-8")
+            except UnicodeDecodeError as e:
+                # if the failing bit is at the start or end, we throw it away
+                if e.start == 0:
+                    fragment = fragment[e.end :]
+                elif e.end == len(fragment):
+                    fragment = fragment[: e.start]
+                else:
+                    # but if something in the middle fails, let's ust fall back to an error replace
+                    return fragment.decode("utf-8", errors="replace")
 
     def put(
         self,
