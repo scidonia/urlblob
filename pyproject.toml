@@ -50,3 +50,8 @@ urlblob = "urlblob.main:main"
 
 [tool.hatch.build]
 include = ["pyproject.toml", "urlblob", "README.md", "LICENSE"]
+
+[dependency-groups]
+dev = [
+    "ipython>=8.37.0",
+]
