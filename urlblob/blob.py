@@ -87,6 +87,91 @@ class UrlBlob:
         content = await self.get(byte_range, start, end)
         return content.decode("utf-8").splitlines()
 
+    async def get_valid_string(
+        self,
+        byte_range: range | None = None,
+        start: int | None = None,
+        end: int | None = None,
+    ) -> str:
+        """
+        Download blob content as a valid UTF-8 string, handling partial UTF-8 sequences
+        at range boundaries by extending the range as needed.
+
+        Args:
+            byte_range: Optional range of bytes to download (end-exclusive, like Python's range).
+            start: Optional start byte position (alternative to byte_range).
+            end: Optional end byte position (alternative to byte_range, end-inclusive).
+
+        Returns:
+            str: The downloaded content as a valid UTF-8 string.
+        """
+        # If no range specified, get everything and use replace for invalid sequences
+        if byte_range is None and start is None and end is None:
+            content = await self.get()
+            return content.decode("utf-8", errors="replace")
+
+        # Convert byte_range to start/end if provided
+        if byte_range is not None:
+            range_start = byte_range.start if byte_range.start is not None else 0
+            # Convert end-exclusive range to end-inclusive for consistency with other methods
+            range_end = byte_range.stop - 1 if byte_range.stop is not None else None
+        else:
+            range_start = start
+            range_end = end
+
+        # Get the initial fragment
+        fragment = await self.get(start=range_start, end=range_end)
+        original_fragment = fragment
+        left_extension = 0
+        right_extension = 0
+        blob_stats = None
+
+        while True:
+            try:
+                # At some point we need to give up. Since each valid UTF-8 sequence is at most 4 bytes long,
+                # we should have a parsable string by extending at most 3 times both on the left and right.
+                if left_extension >= 4 or right_extension >= 4:
+                    break
+
+                # Try to parse what we have now
+                return fragment.decode("utf-8")
+            except UnicodeDecodeError as e:
+                if e.start == 0 and e.reason.startswith("invalid start"):
+                    # Failure is at the very start, so let's extend leftward
+                    left_extension += 1
+                    # We cannot extend past the start of the document, and we should only extend at most 3 steps
+                    if (
+                        range_start is None
+                        or left_extension > range_start
+                        or left_extension >= 4
+                    ):
+                        break
+
+                    pos = range_start - left_extension
+                    # Extend one byte to the left
+                    left_byte = await self.get(start=pos, end=pos)
+                    fragment = left_byte + fragment
+                elif e.end == len(fragment) and e.reason.startswith("unexpected end"):
+                    # Failure is at the very end, so let's extend rightward
+                    right_extension += 1
+                    # If end is None there's no chance of extending rightward. Otherwise make sure we don't go past the end.
+                    blob_stats = blob_stats or await self.stat()  # Lazy lookup
+                    if (
+                        range_end is None
+                        or range_end + right_extension + 1 >= blob_stats.size()
+                        or right_extension >= 4
+                    ):
+                        break
+                    pos = range_end + right_extension
+                    right_byte = await self.get(start=pos, end=pos)
+                    fragment += right_byte
+                else:
+                    # Failure appears to be in the middle. There is no recovery from this
+                    break
+
+        # If we got here, we hit a break condition in the loop above. Fall back to decode with replace
+        return original_fragment.decode("utf-8", errors="replace")
+
     async def stream(
         self,
         byte_range: range | None = None,
